@@ -1,0 +1,16 @@
+micronaut:
+  application:
+    name: pnxCloud
+  caches:
+    github:
+      expire-after-write: 10m
+      maximum-size: 100
+    file-cache:
+      expire-after-write: 15m
+      maximum-size: 100
+    file-cache.isFileCached:
+      expire-after-write: 7d
+netty:
+  default:
+    allocator:
+      max-order: 3

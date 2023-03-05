@@ -1,0 +1,80 @@
+import java.nio.file.FileSystems
+import java.nio.file.Files
+
+plugins {
+    id("com.github.johnrengelman.shadow") version "7.1.2"
+    id("io.micronaut.application") version "3.7.0"
+}
+
+version = "0.1"
+group = "cn.powernukkitx"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'org.projectlombok:lombok:1.18.12'
+    annotationProcessor "org.projectlombok:lombok:1.18.12"
+    implementation 'org.jetbrains:annotations:23.0.0'
+    annotationProcessor("io.micronaut:micronaut-http-validation")
+    annotationProcessor("io.micronaut.security:micronaut-security-annotations")
+    implementation("io.micronaut:micronaut-http-client")
+    implementation("io.micronaut:micronaut-jackson-databind")
+    implementation("io.micronaut.cache:micronaut-cache-caffeine")
+    implementation("io.micronaut.acme:micronaut-acme:3.2.0")
+    implementation("jakarta.annotation:jakarta.annotation-api")
+    implementation("io.micronaut.security:micronaut-security")
+    implementation("io.micronaut.reactor:micronaut-reactor")
+    runtimeOnly("com.h2database:h2")
+    runtimeOnly("org.slf4j:slf4j-simple")
+    implementation("io.micronaut:micronaut-validation")
+    implementation 'org.kohsuke:github-api:1.313'
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.2'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.2'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.2'
+    implementation 'org.dizitart:nitrite:3.4.2'
+    implementation 'org.kamranzafar:jtar:2.3'
+}
+
+application {
+    mainClass.set("cn.powernukkitx.cloud.Application")
+}
+java {
+    sourceCompatibility = JavaVersion.toVersion("17")
+    targetCompatibility = JavaVersion.toVersion("17")
+}
+
+graalvmNative.toolchainDetection = false
+micronaut {
+    runtime("netty")
+    testRuntime("junit5")
+    processing {
+        incremental(true)
+        annotations("cn.powernukkitx.*")
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+}
+
+tasks.register('slimShadow') {
+    dependsOn shadowJar
+    doLast {
+        var shadowJar = tasks.shadowJar.outputs.files.singleFile
+        // removes gh-cli-win.exe, gh-cli-linux, gh-cli-mac in the compressed file
+        try (var jarFileSystem = FileSystems.newFileSystem(shadowJar.toPath())) {
+            if (Files.exists(jarFileSystem.getPath("/gh-cli-win.exe"))) {
+                Files.delete(jarFileSystem.getPath("/gh-cli-win.exe"))
+            }
+            if (Files.exists(jarFileSystem.getPath("/gh-cli-linux"))) {
+                Files.delete(jarFileSystem.getPath("/gh-cli-linux"))
+            }
+            if (Files.exists(jarFileSystem.getPath("/gh-cli-mac"))) {
+                Files.delete(jarFileSystem.getPath("/gh-cli-mac"))
+            }
+        }
+    }
+}
+
