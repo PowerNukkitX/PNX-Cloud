@@ -24,6 +24,9 @@ public class DefaultController {
     public SystemFile file(String path) throws IOException {
         var file = new File("data/static/" + path);
         if (file.exists()) {
+            if (file.isDirectory()) {
+                file = new File(file, "index.html");
+            }
             return new SystemFile(file);
         } else {
             throw new IOException(path + " not found");
