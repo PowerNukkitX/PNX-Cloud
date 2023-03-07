@@ -31,7 +31,7 @@ public class PluginController {
         this.dbHelper = dbHelper;
     }
 
-    record PluginListRes(int size, List<RepoDataBean> plugins) {
+    record PluginListRes(int size, int totalSize, List<RepoDataBean> plugins) {
     }
 
     @Get("/list")
@@ -56,6 +56,10 @@ public class PluginController {
             throw new InvalidIndexException("Too many items, should be no more than 100: from=" + from + ", size=" + size);
         }
         var repoDataBeanObjectRepository = dbHelper.getRepoDataBeanObjectRepository();
+        var repoSize = repoDataBeanObjectRepository.size();
+        if (from + size > repoSize) {
+            size = (int) (repoSize - from);
+        }
         SortOrder sortOrder;
         if (order.equalsIgnoreCase("desc")) {
             sortOrder = SortOrder.Descending;
@@ -70,7 +74,7 @@ public class PluginController {
         };
         var result = repoDataBeanObjectRepository.find(eq("banned", false),
                 findOptions.thenLimit(from, size));
-        return new PluginListRes(result.size(), result.toList());
+        return new PluginListRes(result.size(), (int) repoSize, result.toList());
     }
 
     @Get("/search")
@@ -106,7 +110,7 @@ public class PluginController {
                         eq("pluginName", keywords)
                 )
         ), FindOptions.sort("qualityScore", sortOrder).thenLimit(0, size));
-        return new PluginListRes(result.size(), result.toList());
+        return new PluginListRes(result.size(), (int) repoDataBeanObjectRepository.size(), result.toList());
     }
 
     @Get("/get/{id:[^/]+(/[^/]+)?}")
