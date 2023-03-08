@@ -30,7 +30,6 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Singleton
@@ -153,7 +152,7 @@ public class GitHubHelper {
     }
 
     public void searchPluginRepos() {
-        var gh = getGitHub(config);
+        var gh = getGitHub(config, true);
         var repoSearchReq = gh.searchRepositories()
                 .q("((pnx OR powernukkitx) AND (plugin OR plug-in))")
                 .language("Java")
@@ -187,9 +186,13 @@ public class GitHubHelper {
                 .q("dependency groupId cn.powernukkitx artifactId powernukkitx")
                 .sort(GHContentSearchBuilder.Sort.BEST_MATCH);
         for (var snippet : buildCodeSearchReq.list().withPageSize(100)) {
+            if (scannedRepos.contains(snippet.getOwner().getFullName())) {
+                log.debug("Skipping repo {} because it was already scanned", snippet.getOwner().getFullName());
+                continue;
+            }
             var repo = getRepo(config, snippet.getOwner().getFullName());
-            if (scannedRepos.contains(repo.getFullName())) {
-                log.debug("Skipping repo {} because it was already scanned", repo.getFullName());
+            if (repo == null || scannedRepos.contains(repo.getFullName())) {
+                log.debug("Skipping repo {} because it was already scanned", NullUtil.tryDo(repo, GHRepository::getFullName, "null"));
                 continue;
             }
             allKnownRepos.remove(repo.getFullName());
@@ -207,9 +210,13 @@ public class GitHubHelper {
                 .q("\"cn.powernukkitx:powernukkitx\"")
                 .sort(GHContentSearchBuilder.Sort.BEST_MATCH);
         for (var snippet : buildCodeSearchReq.list().withPageSize(100)) {
+            if (scannedRepos.contains(snippet.getOwner().getFullName())) {
+                log.debug("Skipping repo {} because it was already scanned", snippet.getOwner().getFullName());
+                continue;
+            }
             var repo = getRepo(config, snippet.getOwner().getFullName());
-            if (scannedRepos.contains(repo.getFullName())) {
-                log.debug("Skipping repo {} because it was already scanned", repo.getFullName());
+            if (repo == null || scannedRepos.contains(repo.getFullName())) {
+                log.debug("Skipping repo {} because it was already scanned", NullUtil.tryDo(repo, GHRepository::getFullName, "null"));
                 continue;
             }
             allKnownRepos.remove(repo.getFullName());
@@ -223,6 +230,10 @@ public class GitHubHelper {
         }
         log.debug("Searching for custom plugin repos...");
         for (var id : allKnownRepos) {
+            if (scannedRepos.contains(id)) {
+                log.debug("Skipping repo {} because it was already scanned", id);
+                continue;
+            }
             var repo = getRepo(config, id);
             if (repo == null || scannedRepos.contains(repo.getFullName())) {
                 log.debug("Skipping repo {} because it was already scanned", id);
@@ -387,9 +398,13 @@ public class GitHubHelper {
     }
 
     public static GitHub getGitHub(GHConfig config) {
+        return getGitHub(config, false);
+    }
+
+    public static GitHub getGitHub(GHConfig config, boolean forceRefreshToken) {
         return GITHUB.updateAndGet(gitHub -> {
             var current = System.currentTimeMillis();
-            if (gitHub == null || current - LAST_UPDATE.get() > 60 * 60 * 1000) {
+            if (forceRefreshToken || gitHub == null || current - LAST_UPDATE.get() > 60 * 60 * 1000) {
                 try {
                     LAST_UPDATE.set(current);
                     return new GitHubBuilder().withAppInstallationToken(getToken(config))
