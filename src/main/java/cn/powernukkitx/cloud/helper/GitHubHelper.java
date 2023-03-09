@@ -6,6 +6,8 @@ import cn.powernukkitx.cloud.config.GHConfig;
 import cn.powernukkitx.cloud.exception.GHRepoFailedException;
 import cn.powernukkitx.cloud.exception.GHRepoNotFoundException;
 import cn.powernukkitx.cloud.util.*;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micronaut.cache.annotation.CacheConfig;
 import io.micronaut.cache.annotation.Cacheable;
 import jakarta.inject.Singleton;
@@ -20,6 +22,7 @@ import org.yaml.snakeyaml.Yaml;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -371,6 +374,33 @@ public class GitHubHelper {
         }
         bean.calcQualityScore(config);
         dbHelper.getRepoDataBeanObjectRepository().update(bean, true);
+    }
+
+    private final Cache<String, String> markdownCache = Caffeine.newBuilder()
+            .expireAfterWrite(1, TimeUnit.HOURS)
+            .maximumSize(32).build();
+
+    public String renderMarkdown(@NotNull String markdown, @Nullable String repo) throws IOException {
+        var key = (repo == null ? "" : repo) + "::" + markdown.hashCode();
+        var md = markdownCache.getIfPresent(key);
+        if (repo == null) {
+            if (md == null) {
+                var writer = new StringWriter();
+                try (var reader = getGitHub(config).renderMarkdown(markdown)) {
+                    reader.transferTo(writer);
+                }
+                markdownCache.put(key, md = writer.toString());
+            }
+        } else {
+            if (md == null) {
+                var writer = new StringWriter();
+                try (var reader = getRepoNotNull(config, repo).renderMarkdown(markdown, MarkdownMode.GFM)) {
+                    reader.transferTo(writer);
+                }
+                markdownCache.put(key, md = writer.toString());
+            }
+        }
+        return md;
     }
 
     static Field clientField;

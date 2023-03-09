@@ -1,5 +1,6 @@
 package cn.powernukkitx.cloud.route;
 
+import cn.powernukkitx.cloud.auth.Roles;
 import cn.powernukkitx.cloud.bean.DownloadIDBean;
 import cn.powernukkitx.cloud.exception.GHRepoFailedException;
 import cn.powernukkitx.cloud.exception.GHRepoNotFoundException;
@@ -11,9 +12,9 @@ import cn.powernukkitx.cloud.util.StringUtil;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.NullSerializer;
 import io.micronaut.http.HttpResponse;
-import io.micronaut.http.annotation.Controller;
+import io.micronaut.http.MediaType;
+import io.micronaut.http.annotation.*;
 import io.micronaut.http.annotation.Error;
-import io.micronaut.http.annotation.Get;
 import jakarta.annotation.security.RolesAllowed;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -29,7 +30,7 @@ import java.util.List;
 import static cn.powernukkitx.cloud.util.Ok.ok;
 
 @Controller("/api/git")
-@RolesAllowed("API/GIT")
+@RolesAllowed(Roles.API_GIT)
 public class GitAPIController {
     private static final Date FUTURE = new Date(Long.MAX_VALUE);
     private final GitHubHelper gh;
@@ -173,6 +174,16 @@ public class GitAPIController {
     @Get("/icon/{repo:[^/]+(/[^/]+)?}")
     public IconRes icon(@NotNull String repo) throws IOException {
         return new IconRes(gh.getRepoIconDownloadIDCached(repo));
+    }
+
+    @Post(value = "/markdown", consumes = MediaType.TEXT_PLAIN)
+    public String markdown(@NotNull @Body String text) throws IOException {
+        return gh.renderMarkdown(text, null);
+    }
+
+    @Post(value = "/markdown/{repo:[^/]+(/[^/]+)?}", consumes = MediaType.TEXT_PLAIN)
+    public String markdown(@NotNull @Body String text, @NotNull String repo) throws IOException {
+        return gh.renderMarkdown(text, repo);
     }
 
     @Error(GHRepoNotFoundException.class)

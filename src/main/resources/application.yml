@@ -10,6 +10,9 @@ micronaut:
       maximum-size: 100
     file-cache.isFileCached:
       expire-after-write: 7d
+  server:
+    cors:
+      enabled: true
 netty:
   default:
     allocator:
