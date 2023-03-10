@@ -67,6 +67,9 @@ public class DownloadController {
                     if (result.rawResponse() != null && null != (result.rawResponse().header("content-type"))) {
                         var oldType = mediaType;
                         mediaType = MediaType.of(Objects.requireNonNull(result.rawResponse().header("content-type")));
+                        if (mediaType == null || mediaType == MediaType.APPLICATION_OCTET_STREAM_TYPE) {
+                            mediaType = oldType;
+                        }
                         if (!mediaType.equals(oldType)) {
                             cachePath = fileCacheHelper.resetExtNameOfCachePath(id, mediaType.getExtension());
                         }
