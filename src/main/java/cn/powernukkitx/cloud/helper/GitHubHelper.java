@@ -157,7 +157,7 @@ public class GitHubHelper {
     public void searchPluginRepos() {
         var gh = getGitHub(config, true);
         var repoSearchReq = gh.searchRepositories()
-                .q("((pnx OR powernukkitx) AND (plugin OR plug-in))")
+                .q("((pnx OR powernukkitx OR \"PowerNukkit X\") AND (plugin OR plug-in))")
                 .language("Java")
                 .language("Kotlin")
                 .language("JavaScript")
@@ -237,7 +237,14 @@ public class GitHubHelper {
                 log.debug("Skipping repo {} because it was already scanned", id);
                 continue;
             }
-            var repo = getRepo(config, id);
+            GHRepository repo;
+            try {
+                repo = getRepo(config, id);
+            } catch (GHRepoNotFoundException e) {
+                log.debug("Remove repo {} because it is not accessible", id);
+                dbHelper.getRepoDataBeanObjectRepository().remove(ObjectFilters.eq("id", id));
+                continue;
+            }
             if (repo == null || scannedRepos.contains(repo.getFullName())) {
                 log.debug("Skipping repo {} because it was already scanned", id);
                 continue;
@@ -466,6 +473,9 @@ public class GitHubHelper {
             } else
                 throw new GHRepoNotFoundException(repoName);
         } catch (Exception e) {
+            if (e instanceof GHFileNotFoundException) {
+                throw new GHRepoNotFoundException(repoName);
+            }
             e.printStackTrace();
         }
         return null;

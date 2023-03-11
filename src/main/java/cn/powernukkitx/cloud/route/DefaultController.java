@@ -1,5 +1,6 @@
 package cn.powernukkitx.cloud.route;
 
+import cn.powernukkitx.cloud.util.StringUtil;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
@@ -27,8 +28,17 @@ public class DefaultController {
             if (file.isDirectory()) {
                 file = new File(file, "index.html");
             }
-            return new SystemFile(file);
+            if (file.exists()) {
+                return new SystemFile(file);
+            } else {
+                throw new IOException(path + " not found");
+            }
         } else {
+            var indexPath = StringUtil.beforeFirst(path, "/");
+            var tmpFile = new File("data/static/" + indexPath + "/index.html");
+            if (tmpFile.exists()) {
+                return new SystemFile(tmpFile);
+            }
             throw new IOException(path + " not found");
         }
     }
