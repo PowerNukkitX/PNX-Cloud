@@ -2,6 +2,7 @@ package cn.powernukkitx.cloud.task;
 
 import cn.powernukkitx.cloud.config.GHConfig;
 import cn.powernukkitx.cloud.config.SecretConfig;
+import cn.powernukkitx.cloud.config.StaticConfig;
 import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
 import jakarta.inject.Singleton;
@@ -14,10 +15,12 @@ public class ConfigTimedTask implements ApplicationEventListener<ServerStartupEv
 
     private final GHConfig ghConfig;
     private final SecretConfig secretConfig;
+    private final StaticConfig staticConfig;
 
-    public ConfigTimedTask(@NotNull GHConfig ghConfig, @NotNull SecretConfig secretConfig) {
+    public ConfigTimedTask(@NotNull GHConfig ghConfig, @NotNull SecretConfig secretConfig, @NotNull StaticConfig staticConfig) {
         this.ghConfig = ghConfig;
         this.secretConfig = secretConfig;
+        this.staticConfig = staticConfig;
     }
 
     @Override
@@ -25,6 +28,7 @@ public class ConfigTimedTask implements ApplicationEventListener<ServerStartupEv
         log.info("All registered config: ");
         log.info("GitHub config: {}", ghConfig);
         log.info("Secret config: {}", secretConfig);
+        log.info("Static config: {}", staticConfig);
         log.info("");
     }
 }

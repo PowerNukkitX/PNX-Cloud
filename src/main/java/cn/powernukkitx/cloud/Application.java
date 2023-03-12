@@ -9,7 +9,7 @@ public class Application {
         // Use UTF-8
         System.setProperty("file.encoding", "UTF-8");
         // Pass config files we need.
-        ConfigUtil.init("config/github.yml", "config/server.yml", "config/secret.yml", "config/acme.yml");
+        ConfigUtil.init("config/github.yml", "config/server.yml", "config/secret.yml", "config/acme.yml", "config/static.yml");
         Micronaut.run(Application.class, args);
     }
 }
