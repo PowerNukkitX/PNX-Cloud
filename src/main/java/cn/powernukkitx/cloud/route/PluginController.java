@@ -2,10 +2,16 @@ package cn.powernukkitx.cloud.route;
 
 import cn.powernukkitx.cloud.auth.Roles;
 import cn.powernukkitx.cloud.bean.RepoDataBean;
+import cn.powernukkitx.cloud.bean.RequestIDBean;
 import cn.powernukkitx.cloud.exception.InvalidIndexException;
+import cn.powernukkitx.cloud.helper.AsyncHelper;
 import cn.powernukkitx.cloud.helper.DBHelper;
 import cn.powernukkitx.cloud.util.Ok;
 import cn.powernukkitx.cloud.util.PrefixedKeyGenerator;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.NullSerializer;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micronaut.cache.annotation.CacheConfig;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Controller;
@@ -16,8 +22,12 @@ import jakarta.annotation.security.RolesAllowed;
 import org.dizitart.no2.FindOptions;
 import org.dizitart.no2.SortOrder;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BiConsumer;
 
 import static org.dizitart.no2.objects.filters.ObjectFilters.*;
 
@@ -26,9 +36,11 @@ import static org.dizitart.no2.objects.filters.ObjectFilters.*;
 @CacheConfig(value = "plugin", keyGenerator = PrefixedKeyGenerator.class)
 public class PluginController {
     private final DBHelper dbHelper;
+    private final AsyncHelper asyncHelper;
 
-    public PluginController(DBHelper dbHelper) {
+    public PluginController(DBHelper dbHelper, AsyncHelper asyncHelper) {
         this.dbHelper = dbHelper;
+        this.asyncHelper = asyncHelper;
     }
 
     record PluginListRes(int size, int totalSize, List<RepoDataBean> plugins) {
@@ -121,6 +133,101 @@ public class PluginController {
             throw new InvalidIndexException("Invalid id: " + id);
         }
         return result;
+    }
+
+    record DependencyGraphRes(boolean success,
+                              @JsonSerialize(nullsUsing = NullSerializer.class) @Nullable String reason,
+                              @JsonSerialize(nullsUsing = NullSerializer.class) @Nullable String mermaid) {
+
+    }
+
+    record Link(boolean isSoftDependency, String toPluginName, String fromPluginName) {
+    }
+
+    static final Cache<String, String> dependencyGraphCache = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofMinutes(15))
+            .maximumSize(128)
+            .build();
+
+    @Get("/dependency-graph/{name}")
+    public RequestIDBean dependencyGraph(String name) {
+        return asyncHelper.runIOTask(UUID.nameUUIDFromBytes(("dependency-graph-" + name + ThreadLocalRandom.current().nextInt()).getBytes()), () -> {
+            var cachedMermaid = dependencyGraphCache.getIfPresent(name);
+            if (cachedMermaid != null) {
+                return HttpResponse.ok(new DependencyGraphRes(true, null, cachedMermaid));
+            }
+            var repoDataBeanObjectRepository = dbHelper.getRepoDataBeanObjectRepository();
+            var root = repoDataBeanObjectRepository.find(eq("pluginName", name)).firstOrDefault();
+            if (root == null) {
+                return HttpResponse.badRequest(new DependencyGraphRes(false, "Plugin " + name + " not found.", null));
+            }
+            var searchedSet = new HashSet<String>(16);
+            var toSearchSet = new HashSet<RepoDataBean>(4);
+            var pluginList = new ArrayList<String>(8);
+            var linkList = new LinkedHashSet<Link>(32);
+            toSearchSet.add(root);
+            // 查找依赖的插件
+            while (!toSearchSet.isEmpty()) {
+                var plugin = toSearchSet.iterator().next();
+                toSearchSet.remove(plugin);
+                if (searchedSet.contains(plugin.getPluginName())) {
+                    continue;
+                }
+                searchedSet.add(plugin.getPluginName());
+                pluginList.add(plugin.getPluginName());
+                for (var dependency : plugin.getDependencies()) {
+                    var dependencyPlugin = repoDataBeanObjectRepository.find(eq("pluginName", dependency)).firstOrDefault();
+                    if (dependencyPlugin != null) {
+                        toSearchSet.add(dependencyPlugin);
+                    }
+                    linkList.add(new Link(false, plugin.getPluginName(), dependency));
+                }
+                for (var softDependency : plugin.getSoftDependencies()) {
+                    var softDependencyPlugin = repoDataBeanObjectRepository.find(eq("pluginName", softDependency)).firstOrDefault();
+                    if (softDependencyPlugin != null) {
+                        toSearchSet.add(softDependencyPlugin);
+                    }
+                    linkList.add(new Link(true, plugin.getPluginName(), softDependency));
+                }
+            }
+            // 保证正确的顺序
+            Collections.reverse(pluginList);
+            BiConsumer<RepoDataBean, Boolean> tmp = (dependentPlugin, isSoftDependency) -> {
+                if (searchedSet.contains(dependentPlugin.getPluginName())) {
+                    return;
+                }
+                searchedSet.add(dependentPlugin.getPluginName());
+                pluginList.add(dependentPlugin.getPluginName());
+                for (var each : dependentPlugin.getDependencies()) {
+                    if (pluginList.contains(each)) {
+                        linkList.add(new Link(false, dependentPlugin.getPluginName(), each));
+                    }
+                }
+                for (var each : dependentPlugin.getSoftDependencies()) {
+                    if (pluginList.contains(each)) {
+                        linkList.add(new Link(true, dependentPlugin.getPluginName(), each));
+                    }
+                }
+                linkList.add(new Link(isSoftDependency, dependentPlugin.getPluginName(), name));
+            };
+            // 查找被依赖的插件
+            repoDataBeanObjectRepository.find(elemMatch("dependencies", eq("pluginName", name))).forEach(v -> tmp.accept(v, false));
+            repoDataBeanObjectRepository.find(elemMatch("softDependencies", eq("pluginName", name))).forEach(v -> tmp.accept(v, true));
+            var mermaid = new StringBuilder("graph TD").append('\n');
+            for (var plugin : pluginList) {
+                mermaid.append("    ").append(plugin).append("(").append(plugin).append(")").append('\n');
+            }
+            for (var link : linkList) {
+                mermaid.append("    ").append(link.fromPluginName()).append("-");
+                if (link.isSoftDependency()) {
+                    mermaid.append(".-");
+                } else {
+                    mermaid.append("--");
+                }
+                mermaid.append(">").append(link.toPluginName()).append('\n');
+            }
+            return HttpResponse.ok(new DependencyGraphRes(true, null, mermaid.toString()));
+        });
     }
 
     @Error(exception = InvalidIndexException.class)
