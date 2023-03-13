@@ -154,84 +154,115 @@ public class GitHubHelper {
                 dbHelper.getDownloadIDBeanObjectRepository());
     }
 
+    public enum SearchMethod {
+        KEYWORDS, MAVEN, GRADLE
+    }
+
     public void searchPluginRepos() {
+        searchPluginRepos(EnumSet.of(SearchMethod.KEYWORDS, SearchMethod.MAVEN, SearchMethod.GRADLE));
+    }
+
+    public void searchPluginRepos(SearchMethod... searchMethods) {
+        searchPluginRepos(EnumSet.copyOf(Arrays.asList(searchMethods)));
+    }
+
+    public void searchPluginRepos(EnumSet<SearchMethod> searchMethods) {
         var gh = getGitHub(config, true);
-        var repoSearchReq = gh.searchRepositories()
-                .q("((pnx OR powernukkitx OR \"PowerNukkit X\") AND (plugin OR plug-in))")
-                .language("Java")
-                .language("Kotlin")
-                .language("JavaScript")
-                .language("Groovy")
-                .language("Scala")
-                .language("TypeScript")
-                .in("name")
-                .in("description")
-                .in("readme")
-                .in("topics")
-                .sort(GHRepositorySearchBuilder.Sort.UPDATED)
-                .order(GHDirection.DESC);
-        log.debug("Searching for plugin repos by keywords...");
+        var scannedRepos = new ArrayList<String>();
         var allKnownRepos = dbHelper.getRepoDataBeanObjectRepository().find().toList()
                 .stream().filter(e -> !e.isBanned()).map(RepoDataBean::getId).collect(Collectors.toSet());
-        var scannedRepos = new ArrayList<String>();
-        for (var repo : repoSearchReq.list().withPageSize(100)) {
-            allKnownRepos.remove(repo.getFullName());
-            try {
-                log.debug("Scanning repo {}", repo.getFullName());
-                checkAndAddRepo(repo);
-                scannedRepos.add(repo.getFullName());
-            } catch (IOException e) {
-                log.error("Failed to check repo " + repo.getFullName(), e);
+
+        if (searchMethods.contains(SearchMethod.KEYWORDS)) {
+            log.info("Searching for plugin repos by keywords...");
+            var repoSearchReq = gh.searchRepositories()
+                    .q("((pnx OR powernukkitx) AND (plugin OR plug-in))")
+                    .language("Java")
+                    .language("Kotlin")
+                    .language("JavaScript")
+                    .language("Groovy")
+                    .language("Scala")
+                    .language("TypeScript")
+                    .in("name")
+                    .in("description")
+                    .in("readme")
+                    .in("topics")
+                    .sort(GHRepositorySearchBuilder.Sort.UPDATED)
+                    .order(GHDirection.DESC);
+            var count = 0;
+            for (var repo : repoSearchReq.list().withPageSize(100)) {
+                count++;
+                allKnownRepos.remove(repo.getFullName());
+                try {
+                    log.debug("Scanning repo {}", repo.getFullName());
+                    checkAndAddRepo(repo);
+                    scannedRepos.add(repo.getFullName());
+                } catch (IOException e) {
+                    log.error("Failed to check repo " + repo.getFullName(), e);
+                }
             }
+            log.info("Found {} plugin repos by keywords", count);
         }
-        log.debug("Searching for plugin repos by pom.xml...");
-        var buildCodeSearchReq = gh.searchContent()
-                .q("dependency groupId cn.powernukkitx artifactId powernukkitx")
-                .sort(GHContentSearchBuilder.Sort.BEST_MATCH);
-        for (var snippet : buildCodeSearchReq.list().withPageSize(100)) {
-            if (scannedRepos.contains(snippet.getOwner().getFullName())) {
-                log.debug("Skipping repo {} because it was already scanned", snippet.getOwner().getFullName());
-                continue;
+
+        if (searchMethods.contains(SearchMethod.MAVEN)) {
+            log.info("Searching for plugin repos by pom.xml...");
+            var buildCodeSearchReq = gh.searchContent()
+                    .q("dependency groupId cn.powernukkitx artifactId powernukkitx")
+                    .sort(GHContentSearchBuilder.Sort.BEST_MATCH);
+            var count = 0;
+            for (var snippet : buildCodeSearchReq.list().withPageSize(100)) {
+                if (scannedRepos.contains(snippet.getOwner().getFullName())) {
+                    log.debug("Skipping repo {} because it was already scanned", snippet.getOwner().getFullName());
+                    continue;
+                }
+                var repo = getRepo(config, snippet.getOwner().getFullName());
+                if (repo == null || scannedRepos.contains(repo.getFullName())) {
+                    log.debug("Skipping repo {} because it was already scanned", NullUtil.tryDo(repo, GHRepository::getFullName, "null"));
+                    continue;
+                }
+                allKnownRepos.remove(repo.getFullName());
+                try {
+                    log.debug("Scanning repo {}", repo.getFullName());
+                    checkAndAddRepo(repo);
+                    scannedRepos.add(repo.getFullName());
+                    count++;
+                } catch (IOException e) {
+                    log.error("Failed to check repo " + repo.getFullName(), e);
+                }
             }
-            var repo = getRepo(config, snippet.getOwner().getFullName());
-            if (repo == null || scannedRepos.contains(repo.getFullName())) {
-                log.debug("Skipping repo {} because it was already scanned", NullUtil.tryDo(repo, GHRepository::getFullName, "null"));
-                continue;
-            }
-            allKnownRepos.remove(repo.getFullName());
-            try {
-                log.debug("Scanning repo {}", repo.getFullName());
-                checkAndAddRepo(repo);
-                scannedRepos.add(repo.getFullName());
-            } catch (IOException e) {
-                log.error("Failed to check repo " + repo.getFullName(), e);
-            }
+            log.info("Found {} plugin repos by pom.xml", count);
         }
-        // build.gradle
-        log.debug("Searching for plugin repos by build.gradle...");
-        buildCodeSearchReq = gh.searchContent()
-                .q("\"cn.powernukkitx:powernukkitx\"")
-                .sort(GHContentSearchBuilder.Sort.BEST_MATCH);
-        for (var snippet : buildCodeSearchReq.list().withPageSize(100)) {
-            if (scannedRepos.contains(snippet.getOwner().getFullName())) {
-                log.debug("Skipping repo {} because it was already scanned", snippet.getOwner().getFullName());
-                continue;
+
+        if (searchMethods.contains(SearchMethod.GRADLE)) {
+            log.info("Searching for plugin repos by build.gradle...");
+            var buildCodeSearchReq = gh.searchContent()
+                    .q("\"cn.powernukkitx:powernukkitx\"")
+                    .sort(GHContentSearchBuilder.Sort.BEST_MATCH);
+            var count = 0;
+            for (var snippet : buildCodeSearchReq.list().withPageSize(100)) {
+                if (scannedRepos.contains(snippet.getOwner().getFullName())) {
+                    log.debug("Skipping repo {} because it was already scanned", snippet.getOwner().getFullName());
+                    continue;
+                }
+                var repo = getRepo(config, snippet.getOwner().getFullName());
+                if (repo == null || scannedRepos.contains(repo.getFullName())) {
+                    log.debug("Skipping repo {} because it was already scanned", NullUtil.tryDo(repo, GHRepository::getFullName, "null"));
+                    continue;
+                }
+                allKnownRepos.remove(repo.getFullName());
+                try {
+                    log.debug("Scanning repo {}", repo.getFullName());
+                    checkAndAddRepo(repo);
+                    scannedRepos.add(repo.getFullName());
+                    count++;
+                } catch (IOException e) {
+                    log.error("Failed to check repo " + repo.getFullName(), e);
+                }
             }
-            var repo = getRepo(config, snippet.getOwner().getFullName());
-            if (repo == null || scannedRepos.contains(repo.getFullName())) {
-                log.debug("Skipping repo {} because it was already scanned", NullUtil.tryDo(repo, GHRepository::getFullName, "null"));
-                continue;
-            }
-            allKnownRepos.remove(repo.getFullName());
-            try {
-                log.debug("Scanning repo {}", repo.getFullName());
-                checkAndAddRepo(repo);
-                scannedRepos.add(repo.getFullName());
-            } catch (IOException e) {
-                log.error("Failed to check repo " + repo.getFullName(), e);
-            }
+            log.info("Found {} plugin repos by build.gradle", count);
         }
-        log.debug("Searching for custom plugin repos...");
+
+        log.info("Searching for custom plugin repos...");
+        var count = 0;
         for (var id : allKnownRepos) {
             if (scannedRepos.contains(id)) {
                 log.debug("Skipping repo {} because it was already scanned", id);
@@ -253,10 +284,12 @@ public class GitHubHelper {
                 log.debug("Scanning repo {}", repo.getFullName());
                 checkAndAddRepo(repo);
                 scannedRepos.add(id);
+                count++;
             } catch (IOException e) {
                 log.error("Failed to check repo " + repo.getFullName(), e);
             }
         }
+        log.info("Updated {} custom plugin repos", count);
     }
 
     public void checkAndAddRepo(@NotNull GHRepository repo) throws IOException {

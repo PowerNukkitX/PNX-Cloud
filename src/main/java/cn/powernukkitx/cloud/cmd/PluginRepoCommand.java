@@ -9,6 +9,7 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.util.EnumSet;
 
 @Singleton
 public class PluginRepoCommand implements Command {
@@ -41,11 +42,33 @@ public class PluginRepoCommand implements Command {
         }
         switch (args[0]) {
             case "info" -> {
-                return false;
+                if (args.length < 2) {
+                    log.info("Usage: pluginRepo info <id>");
+                    return false;
+                }
+                String id = args[1];
+                var plugin = dbHelper.getRepoDataBeanObjectRepository().find(ObjectFilters.eq("id", id)).firstOrDefault();
+                if (plugin == null) {
+                    log.info("Plugin not found");
+                    return false;
+                }
+                log.info(plugin.getId());
+                return true;
             }
             case "search" -> {
-                log.info("Searching all possible plugin repos...");
-                AsyncHelper.runIOTask(ghHelper::searchPluginRepos).thenRun(() -> log.info("Search finished"));
+                var set = EnumSet.allOf(GitHubHelper.SearchMethod.class);
+                if (args.length > 1) {
+                    set.clear();
+                    for (int i = 1; i < args.length; i++) {
+                        try {
+                            set.add(GitHubHelper.SearchMethod.valueOf(args[i].toUpperCase()));
+                        } catch (IllegalArgumentException ignored) {
+                            log.info("Unknown search method: {}", args[i]);
+                        }
+                    }
+                }
+                log.info("Searching all possible plugin repos using methods {} ...", set);
+                AsyncHelper.runIOTask(() -> ghHelper.searchPluginRepos(set)).thenRun(() -> log.info("Search finished"));
                 return true;
             }
             case "add" -> {
