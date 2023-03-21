@@ -18,9 +18,9 @@ public final class ZipUtil {
 
     public static void decompress(@NotNull Path compressedFilePath, Path decompressDirPath) throws IOException {
         var pathStr = compressedFilePath.toString();
-        if (pathStr.endsWith(".zip") || pathStr.endsWith(".jar")) {
+        if (pathStr.endsWith("zip") || pathStr.endsWith("jar")) {
             decompressZip(compressedFilePath, decompressDirPath);
-        } else if (pathStr.endsWith(".tar.gz")) {
+        } else if (pathStr.endsWith("tar.gz")) {
             decompressTarGz(compressedFilePath, decompressDirPath);
         } else {
             throw new IllegalArgumentException("Unsupported file type: " + compressedFilePath);

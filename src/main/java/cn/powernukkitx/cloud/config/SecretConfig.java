@@ -23,6 +23,15 @@ public class SecretConfig {
 
     CDNAuthHeader cdnAuthHeader;
 
+    @ConfigurationProperties("meiliSearch")
+    @Data
+    public static class MeiliSearch {
+        String url;
+        String key;
+    }
+
+    MeiliSearch meiliSearch;
+
     @EachProperty("tokens")
     @Data
     public static class TokenConfig {

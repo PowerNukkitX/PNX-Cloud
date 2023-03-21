@@ -9,6 +9,7 @@ import org.dizitart.no2.IndexType;
 import org.dizitart.no2.objects.Id;
 import org.dizitart.no2.objects.Index;
 import org.dizitart.no2.objects.Indices;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Date;
@@ -86,5 +87,28 @@ public final class RepoDataBean {
         }
         qualityScore += editorRecommendScore;
         this.qualityScore = qualityScore;
+    }
+
+    @Contract(" -> new")
+    public @NotNull RepoDataBean toSearchFriendlyBean() {
+        var bean = new RepoDataBean();
+        bean.id = id.replace('/', '-');
+        bean.owner = owner;
+        bean.name = name;
+        bean.description = description;
+        bean.mainLanguage = mainLanguage;
+        bean.lastUpdateAt = lastUpdateAt;
+        bean.topics = topics;
+        bean.star = star;
+        bean.iconDownloadID = iconDownloadID;
+        bean.pluginName = pluginName;
+        bean.mainClass = mainClass;
+        bean.dependencies = dependencies;
+        bean.softDependencies = softDependencies;
+        bean.banned = banned;
+        bean.qualityScore = qualityScore;
+        bean.editorRecommendScore = editorRecommendScore;
+        bean.lastFullIndexTime = lastFullIndexTime;
+        return bean;
     }
 }

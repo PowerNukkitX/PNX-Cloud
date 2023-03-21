@@ -1,6 +1,7 @@
 package cn.powernukkitx.cloud.task;
 
 import cn.powernukkitx.cloud.config.GHConfig;
+import cn.powernukkitx.cloud.config.SearchConfig;
 import cn.powernukkitx.cloud.config.SecretConfig;
 import cn.powernukkitx.cloud.config.StaticConfig;
 import io.micronaut.context.event.ApplicationEventListener;
@@ -16,11 +17,14 @@ public class ConfigTimedTask implements ApplicationEventListener<ServerStartupEv
     private final GHConfig ghConfig;
     private final SecretConfig secretConfig;
     private final StaticConfig staticConfig;
+    private final SearchConfig searchConfig;
 
-    public ConfigTimedTask(@NotNull GHConfig ghConfig, @NotNull SecretConfig secretConfig, @NotNull StaticConfig staticConfig) {
+    public ConfigTimedTask(@NotNull GHConfig ghConfig, @NotNull SecretConfig secretConfig, @NotNull StaticConfig staticConfig,
+                           @NotNull SearchConfig searchConfig) {
         this.ghConfig = ghConfig;
         this.secretConfig = secretConfig;
         this.staticConfig = staticConfig;
+        this.searchConfig = searchConfig;
     }
 
     @Override
@@ -29,6 +33,7 @@ public class ConfigTimedTask implements ApplicationEventListener<ServerStartupEv
         log.info("GitHub config: {}", ghConfig);
         log.info("Secret config: {}", secretConfig);
         log.info("Static config: {}", staticConfig);
+        log.info("Search config: {}", searchConfig);
         log.info("");
     }
 }

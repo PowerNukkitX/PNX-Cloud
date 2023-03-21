@@ -160,9 +160,9 @@ public class FileCacheHelper {
         if (Files.isDirectory(path)) return false;
         if (Files.size(path) == 0) return false;
         var pathString = path.toString();
-        if (pathString.endsWith(".zip")) return true;
-        if (pathString.endsWith(".jar")) return true;
-        return pathString.endsWith(".tar.gz");
+        if (pathString.endsWith("zip")) return true;
+        if (pathString.endsWith("jar")) return true;
+        return pathString.endsWith("tar.gz");
     }
 
     public @NotNull Path getDecompressedPath(long id) throws IdNotFoundException {
@@ -170,6 +170,8 @@ public class FileCacheHelper {
         var pathStr = path.getFileName().toString();
         if (pathStr.contains(".")) {
             pathStr = StringUtil.beforeLast(pathStr, ".") + "_decompress-cache";
+        } else {
+            pathStr += "_decompress-cache";
         }
         return path.resolveSibling(pathStr);
     }

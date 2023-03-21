@@ -6,12 +6,14 @@ import cn.powernukkitx.cloud.bean.RequestIDBean;
 import cn.powernukkitx.cloud.exception.InvalidIndexException;
 import cn.powernukkitx.cloud.helper.AsyncHelper;
 import cn.powernukkitx.cloud.helper.DBHelper;
+import cn.powernukkitx.cloud.helper.MeiliSearchHelper;
 import cn.powernukkitx.cloud.util.Ok;
 import cn.powernukkitx.cloud.util.PrefixedKeyGenerator;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.NullSerializer;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.meilisearch.sdk.exceptions.MeilisearchException;
 import io.micronaut.cache.annotation.CacheConfig;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Controller;
@@ -37,13 +39,15 @@ import static org.dizitart.no2.objects.filters.ObjectFilters.*;
 public class PluginController {
     private final DBHelper dbHelper;
     private final AsyncHelper asyncHelper;
+    private final MeiliSearchHelper searchHelper;
 
-    public PluginController(DBHelper dbHelper, AsyncHelper asyncHelper) {
+    public PluginController(DBHelper dbHelper, AsyncHelper asyncHelper, MeiliSearchHelper searchHelper) {
         this.dbHelper = dbHelper;
         this.asyncHelper = asyncHelper;
+        this.searchHelper = searchHelper;
     }
 
-    record PluginListRes(int size, int totalSize, List<RepoDataBean> plugins) {
+    record PluginListRes(int size, int totalSize, List<?> plugins) {
     }
 
     @Get("/list")
@@ -90,39 +94,22 @@ public class PluginController {
     }
 
     @Get("/search")
-    public PluginListRes search(@QueryValue String keywords, @QueryValue(defaultValue = "15") int size) {
+    public PluginListRes search(@QueryValue String keywords, @QueryValue(defaultValue = "15") int size) throws MeilisearchException {
         return search(keywords, size, "desc");
     }
 
     @Get("/search/{order:asc|desc}")
     public PluginListRes search(@QueryValue String keywords, @QueryValue(defaultValue = "15") int size,
-                                @NotNull String order) {
+                                @NotNull String order) throws MeilisearchException {
         if (size <= 0) {
             throw new InvalidIndexException("Invalid index: size=" + size);
         }
-        if (size > 30) {
+        if (size > 100) {
             throw new InvalidIndexException("Too many items, should be no more than 100: size=" + size);
         }
-        var repoDataBeanObjectRepository = dbHelper.getRepoDataBeanObjectRepository();
-        SortOrder sortOrder;
-        if (order.equalsIgnoreCase("desc")) {
-            sortOrder = SortOrder.Descending;
-        } else {
-            sortOrder = SortOrder.Ascending;
-        }
-        var result = repoDataBeanObjectRepository.find(and(
-                eq("banned", false),
-                or(
-                        eq("owner", keywords),
-                        eq("name", keywords),
-                        eq("id", keywords),
-                        text("description", keywords),
-                        eq("mainLanguage", keywords),
-                        text("topics", keywords),
-                        eq("pluginName", keywords)
-                )
-        ), FindOptions.sort("qualityScore", sortOrder).thenLimit(0, size));
-        return new PluginListRes(result.size(), (int) repoDataBeanObjectRepository.size(), result.toList());
+        var result = searchHelper.search(keywords, size, order);
+        var hits = result.getHits();
+        return new PluginListRes(hits.size(), (int) dbHelper.getRepoDataBeanObjectRepository().size(), hits);
     }
 
     @Get("/get/{id:[^/]+(/[^/]+)?}")
@@ -238,5 +225,10 @@ public class PluginController {
     @Error(exception = IllegalArgumentException.class)
     public HttpResponse<Ok<IllegalArgumentException>> invalidArgument(IllegalArgumentException e) {
         return HttpResponse.badRequest(Ok.ok(e));
+    }
+
+    @Error(exception = MeilisearchException.class)
+    public HttpResponse<Ok<MeilisearchException>> meilisearchError(MeilisearchException e) {
+        return HttpResponse.serverError(Ok.ok(e));
     }
 }
