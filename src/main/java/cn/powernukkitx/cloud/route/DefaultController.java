@@ -5,6 +5,7 @@ import cn.powernukkitx.cloud.util.StringUtil;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
+import io.micronaut.http.MutableHttpResponse;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Error;
 import io.micronaut.http.annotation.Get;
@@ -33,7 +34,9 @@ public class DefaultController {
     }
 
     @Get(uri = "/{path:.+}")
-    public HttpResponse<?> file(@Header("referer") @Nullable String referer, String path) throws IOException {
+    public HttpResponse<?> file(@Header("referer") @Nullable String referer,
+                                @Header("if-none-match") @Nullable String ifNoneMatch,
+                                String path) throws IOException {
         if (staticConfig.getRedirect() != null) {
             var redirect = staticConfig.getRedirect().get(path);
             if (redirect != null) {
@@ -52,7 +55,7 @@ public class DefaultController {
                 file = new File(file, "index.html");
             }
             if (file.exists()) {
-                return HttpResponse.ok(new SystemFile(file));
+                return responseFile(new SystemFile(file), ifNoneMatch);
             } else {
                 throw new IOException(path + " not found");
             }
@@ -60,10 +63,20 @@ public class DefaultController {
             var indexPath = StringUtil.beforeFirst(path, "/");
             var tmpFile = new File("data/static/" + indexPath + "/index.html");
             if (tmpFile.exists()) {
-                return HttpResponse.ok(new SystemFile(tmpFile));
+                return responseFile(new SystemFile(tmpFile), ifNoneMatch);
             }
             throw new IOException(path + " not found");
         }
+    }
+
+    private MutableHttpResponse<?> responseFile(@NotNull SystemFile systemFile, @Nullable String ifNoneMatch) {
+        var file = systemFile.getFile();
+        var etag = file.lastModified() + ":" + file.length();
+        if (etag.equals(ifNoneMatch)) {
+            return HttpResponse.notModified();
+        }
+        return HttpResponse.ok(file)
+                .header("ETag", etag);
     }
 
     @Error(status = HttpStatus.NOT_FOUND, global = true)
