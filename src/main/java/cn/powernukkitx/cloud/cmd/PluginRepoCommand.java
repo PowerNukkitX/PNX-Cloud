@@ -3,8 +3,6 @@ package cn.powernukkitx.cloud.cmd;
 import cn.powernukkitx.cloud.helper.AsyncHelper;
 import cn.powernukkitx.cloud.helper.DBHelper;
 import cn.powernukkitx.cloud.helper.GitHubHelper;
-import cn.powernukkitx.cloud.helper.MeiliSearchHelper;
-import com.meilisearch.sdk.exceptions.MeilisearchException;
 import jakarta.inject.Singleton;
 import org.dizitart.no2.objects.filters.ObjectFilters;
 import org.jetbrains.annotations.NotNull;
@@ -17,12 +15,10 @@ import java.util.EnumSet;
 public class PluginRepoCommand implements Command {
     private final DBHelper dbHelper;
     private final GitHubHelper ghHelper;
-    private final MeiliSearchHelper searchHelper;
 
-    public PluginRepoCommand(@NotNull DBHelper dbHelper, @NotNull GitHubHelper ghHelper, @NotNull MeiliSearchHelper searchHelper) {
+    public PluginRepoCommand(@NotNull DBHelper dbHelper, @NotNull GitHubHelper ghHelper) {
         this.dbHelper = dbHelper;
         this.ghHelper = ghHelper;
-        this.searchHelper = searchHelper;
     }
 
     @Override
@@ -115,7 +111,7 @@ public class PluginRepoCommand implements Command {
                 return true;
             }
             case "sync" -> {
-                sync(log);
+                log.info("Not implemented");
                 return true;
             }
             default -> {
@@ -179,19 +175,6 @@ public class PluginRepoCommand implements Command {
         log.info("Setting editor score of plugin repo: {}", id);
         bean.setEditorRecommendScore(score);
         log.info("Successfully set editor score of plugin repo: {}", id);
-    }
-
-    private void sync(@NotNull Logger log) {
-        log.info("Syncing plugin data to meilisearch...");
-        AsyncHelper.runIOTask(() -> {
-            try {
-                var id = searchHelper.syncPluginData();
-                searchHelper.getMeiliClient().waitForTask(id);
-            } catch (MeilisearchException e) {
-                log.error("Failed to sync plugin data", e);
-            }
-            log.info("Sync submitted");
-        });
     }
 
     @Override

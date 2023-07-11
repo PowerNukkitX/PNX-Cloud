@@ -2,11 +2,7 @@ package cn.powernukkitx.cloud.config;
 
 import io.micronaut.context.annotation.ConfigurationProperties;
 import io.micronaut.context.annotation.EachProperty;
-import io.micronaut.context.annotation.Parameter;
-import jakarta.inject.Named;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,15 +18,6 @@ public class SecretConfig {
     }
 
     CDNAuthHeader cdnAuthHeader;
-
-    @ConfigurationProperties("meiliSearch")
-    @Data
-    public static class MeiliSearch {
-        String url;
-        String key;
-    }
-
-    MeiliSearch meiliSearch;
 
     @EachProperty("tokens")
     @Data
